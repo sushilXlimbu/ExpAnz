@@ -1,15 +1,18 @@
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
-import { formatCurrency } from '../utils/format'
+import { formatCurrency, formatFlowSummary } from '../utils/format'
 
 function CustomTooltip({ active, payload }) {
   if (!active || !payload?.length) return null
-  const { name, value, percent } = payload[0].payload
+  const { name, value, percent, totalOut, totalIn } = payload[0].payload
   return (
     <div className="chart-tooltip">
       <div className="chart-tooltip-value">{formatCurrency(value)}</div>
       <div className="chart-tooltip-label">
         {name} · {(percent * 100).toFixed(1)}%
       </div>
+      {totalIn > 0 && (
+        <div className="chart-tooltip-flow">{formatFlowSummary(totalOut, totalIn)}</div>
+      )}
     </div>
   )
 }
@@ -66,12 +69,16 @@ function CategoryChart({ data, selectedCategory, onSelectCategory }) {
                 'category-legend-row' +
                 (selectedCategory === entry.name ? ' is-selected' : '')
               }
+              title={entry.totalIn > 0 ? formatFlowSummary(entry.totalOut, entry.totalIn) : undefined}
               onClick={() =>
                 onSelectCategory(selectedCategory === entry.name ? null : entry.name)
               }
             >
               <span className="legend-swatch" style={{ background: entry.color }} />
-              <span className="legend-name">{entry.name}</span>
+              <span className="legend-name">
+                {entry.name}
+                {entry.totalIn > 0 && <span className="legend-flow-indicator">↩</span>}
+              </span>
               <span className="legend-percent">{(entry.percent * 100).toFixed(1)}%</span>
               <span className="legend-value">{formatCurrency(entry.value)}</span>
             </button>

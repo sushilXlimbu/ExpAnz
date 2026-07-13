@@ -1,27 +1,29 @@
 import { useEffect, useMemo, useState } from 'react'
-import { fetchTransactions } from './api'
+import { fetchCategories, fetchTransactions, updateTransactionCategory } from './api'
 import FilterBar from './components/FilterBar'
 import SummaryCards from './components/SummaryCards'
 import CategoryChart from './components/CategoryChart'
 import MerchantBreakdown from './components/MerchantBreakdown'
 import TransactionTable from './components/TransactionTable'
 import UploadZone from './components/UploadZone'
+import CategoryManagerModal from './components/CategoryManagerModal'
 import {
   INTERNAL_CATEGORIES,
-  OTHER_LABEL,
+  UNCATEGORIZED_LABEL,
   buildCategoryChartData,
-  categoryColorVar,
-  categoryGroup,
+  buildCategoryColorMap,
+  getCategoryColor,
 } from './utils/categories'
-import { toDateInputValue } from './utils/format'
+import { formatFlowSummary, toDateInputValue } from './utils/format'
 import './App.css'
 
-function inCategorySelection(t, selectedCategory, excludeInternal) {
-  if (selectedCategory === OTHER_LABEL) {
-    if (categoryGroup(t.category) !== OTHER_LABEL) return false
-    return !(excludeInternal && INTERNAL_CATEGORIES.includes(t.category))
-  }
-  return t.category === selectedCategory
+// Accumulates gross out/in per key without netting them against each other —
+// a refund or win must never cancel out real spend in the same bucket.
+function addFlow(groups, key, amount) {
+  const entry = groups.get(key) ?? { totalOut: 0, totalIn: 0 }
+  if (amount < 0) entry.totalOut += -amount
+  else entry.totalIn += amount
+  groups.set(key, entry)
 }
 
 function App() {
@@ -29,14 +31,18 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  const [categories, setCategories] = useState([])
+
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [excludeInternal, setExcludeInternal] = useState(true)
   const [selectedCategory, setSelectedCategory] = useState(null)
   const [selectedMerchant, setSelectedMerchant] = useState(null)
+  const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false)
 
   // `initial` controls whether this shows the full-page loading/error state
-  // (first load) or refreshes quietly behind the current view (post-upload).
+  // (first load) or refreshes quietly behind the current view (post-upload,
+  // post-move, post-category-change).
   async function loadTransactions({ initial = false } = {}) {
     if (initial) setLoading(true)
     try {
@@ -51,16 +57,28 @@ function App() {
       }
     } catch (err) {
       if (initial) setError(err.message)
-      else console.error('Failed to refresh transactions after upload:', err)
+      else console.error('Failed to refresh transactions:', err)
     } finally {
       if (initial) setLoading(false)
     }
   }
 
+  async function loadCategories() {
+    try {
+      const data = await fetchCategories()
+      setCategories(data)
+    } catch (err) {
+      console.error('Failed to load categories:', err)
+    }
+  }
+
   useEffect(() => {
     loadTransactions({ initial: true })
+    loadCategories()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const colorMap = useMemo(() => buildCategoryColorMap(categories), [categories])
 
   const bounds = useMemo(() => {
     if (transactions.length === 0) return { minDate: '', maxDate: '' }
@@ -79,8 +97,13 @@ function App() {
     })
   }, [transactions, startDate, endDate])
 
+  // Only the Income category counts as income — a win in Betting or a refund
+  // in Shopping is money back in that category, not income.
   const totalIncome = useMemo(
-    () => filteredByDate.filter((t) => t.amount > 0).reduce((sum, t) => sum + t.amount, 0),
+    () =>
+      filteredByDate
+        .filter((t) => t.category === 'Income' && t.amount > 0)
+        .reduce((sum, t) => sum + t.amount, 0),
     [filteredByDate],
   )
   const totalSpendingAll = useMemo(
@@ -95,50 +118,102 @@ function App() {
     [filteredByDate],
   )
   const totalSpending = excludeInternal ? totalSpendingTrue : totalSpendingAll
-  const net = totalIncome - totalSpendingAll
+  // Real income minus real spending — matches the two figures shown above it.
+  const net = totalIncome - totalSpending
 
-  const categoryTotals = useMemo(() => {
+  const uncategorizedCount = useMemo(
+    () => filteredByDate.filter((t) => t.category === UNCATEGORIZED_LABEL).length,
+    [filteredByDate],
+  )
+
+  // Gross outflow per category drives the chart's slice size — the same
+  // definition SummaryCards uses for "Total spending" (only amount < 0
+  // counts). Netting refunds/wins against spend here would make a category
+  // with a net gain (e.g. a betting category with more wins than losses)
+  // vanish from the chart despite real spend in it, and would make the pie's
+  // total silently disagree with the summary card. totalIn is tracked
+  // alongside (not subtracted) so it can be surfaced without hiding it.
+  const rawCategoryTotals = useMemo(() => {
     const groups = new Map()
     for (const t of filteredByDate) {
       if (t.category === 'Income') continue
       if (excludeInternal && INTERNAL_CATEGORIES.includes(t.category)) continue
-      const group = categoryGroup(t.category)
-      groups.set(group, (groups.get(group) ?? 0) - t.amount)
+      addFlow(groups, t.category, t.amount)
     }
-    const totals = [...groups.entries()]
-      .map(([name, value]) => ({ name, value }))
+    return [...groups.entries()]
+      .map(([name, { totalOut, totalIn }]) => ({
+        name,
+        value: totalOut,
+        totalOut,
+        totalIn,
+        net: totalOut - totalIn,
+      }))
       .filter((c) => c.value > 0)
-    totals.sort((a, b) => {
-      if (a.name === OTHER_LABEL) return 1
-      if (b.name === OTHER_LABEL) return -1
-      return b.value - a.value
-    })
-    return totals
   }, [filteredByDate, excludeInternal])
 
-  const chartData = useMemo(() => buildCategoryChartData(categoryTotals), [categoryTotals])
+  // Every category with spend gets its own slice — no folding into "Other".
+  const categoryTotals = useMemo(
+    () => [...rawCategoryTotals].sort((a, b) => b.value - a.value),
+    [rawCategoryTotals],
+  )
 
-  // Clear selection if it no longer appears in the current chart data.
+  const chartData = useMemo(
+    () => buildCategoryChartData(categoryTotals, colorMap),
+    [categoryTotals, colorMap],
+  )
+
+  // Clear the selection if it's no longer a sensible thing to be looking at
+  // (category deleted/renamed, toggled out by the internal-transfer filter,
+  // or no longer present in the current date range).
   useEffect(() => {
-    if (selectedCategory && !categoryTotals.some((c) => c.name === selectedCategory)) {
+    if (!selectedCategory) return
+    const stillValid =
+      selectedCategory !== 'Income' &&
+      !(excludeInternal && INTERNAL_CATEGORIES.includes(selectedCategory)) &&
+      filteredByDate.some((t) => t.category === selectedCategory)
+    if (!stillValid) {
       setSelectedCategory(null)
       setSelectedMerchant(null)
     }
-  }, [categoryTotals, selectedCategory])
+  }, [filteredByDate, excludeInternal, selectedCategory])
 
   const categoryFiltered = useMemo(() => {
     if (!selectedCategory) return filteredByDate
-    return filteredByDate.filter((t) => inCategorySelection(t, selectedCategory, excludeInternal))
-  }, [filteredByDate, selectedCategory, excludeInternal])
+    return filteredByDate.filter((t) => t.category === selectedCategory)
+  }, [filteredByDate, selectedCategory])
 
+  // Independent of categoryTotals' Income/internal-transfer exclusions and
+  // its value > 0 filter — this always reflects exactly what's in
+  // categoryFiltered, so the summary cards and drill-down subtitle can't
+  // silently go blank for an edge-case category (e.g. one that's all refund).
+  const selectedCategorySummary = useMemo(() => {
+    if (!selectedCategory) return null
+    let totalOut = 0
+    let totalIn = 0
+    for (const t of categoryFiltered) {
+      if (t.amount < 0) totalOut += -t.amount
+      else totalIn += t.amount
+    }
+    return { name: selectedCategory, totalOut, totalIn, net: totalOut - totalIn }
+  }, [categoryFiltered, selectedCategory])
+
+  // Same gross-outflow definition as rawCategoryTotals above, so a merchant
+  // with a net gain in this category (a win, a refund larger than the spend)
+  // doesn't silently disappear from its own breakdown.
   const merchantTotals = useMemo(() => {
     if (!selectedCategory) return []
     const groups = new Map()
     for (const t of categoryFiltered) {
-      groups.set(t.merchant, (groups.get(t.merchant) ?? 0) - t.amount)
+      addFlow(groups, t.merchant, t.amount)
     }
     return [...groups.entries()]
-      .map(([merchant, value]) => ({ merchant, value }))
+      .map(([merchant, { totalOut, totalIn }]) => ({
+        merchant,
+        value: totalOut,
+        totalOut,
+        totalIn,
+        net: totalOut - totalIn,
+      }))
       .filter((m) => m.value > 0)
       .sort((a, b) => b.value - a.value)
   }, [categoryFiltered, selectedCategory])
@@ -158,6 +233,44 @@ function App() {
     setEndDate(bounds.maxDate)
   }
 
+  async function handleMoveCategory(transactionId, newCategory) {
+    await updateTransactionCategory(transactionId, newCategory)
+    // Same reasoning as the category add/delete handlers: apply the change
+    // to local state immediately rather than waiting on (and depending on
+    // the success of) a full refetch.
+    setTransactions((prev) =>
+      prev.map((t) => (t.id === transactionId ? { ...t, category: newCategory } : t)),
+    )
+    loadTransactions().catch((err) => console.error('Failed to reconcile after move:', err))
+  }
+
+  async function handleCategoriesChanged() {
+    await loadCategories()
+    await loadTransactions()
+  }
+
+  // Applied immediately from the mutation's own result — the dashboard must
+  // not depend on a second network round-trip (the refetch below) succeeding
+  // to reflect a change the server already confirmed.
+  function handleCategoryAdded(category) {
+    setCategories((prev) => {
+      if (prev.some((c) => c.id === category.id)) return prev
+      return [...prev, category].sort((a, b) => a.name.localeCompare(b.name))
+    })
+  }
+
+  function handleCategoryDeleted(id) {
+    const deleted = categories.find((c) => c.id === id)
+    setCategories((prev) => prev.filter((c) => c.id !== id))
+    if (deleted) {
+      setTransactions((prev) =>
+        prev.map((t) =>
+          t.category === deleted.name ? { ...t, category: UNCATEGORIZED_LABEL } : t,
+        ),
+      )
+    }
+  }
+
   if (loading) return <p className="status-message">Loading transactions…</p>
   if (error) {
     return (
@@ -171,7 +284,16 @@ function App() {
 
   return (
     <div className="dashboard">
-      <h1>Budget Analyzer</h1>
+      <div className="dashboard-header">
+        <h1>Budget Analyzer</h1>
+        <button
+          type="button"
+          className="btn-secondary"
+          onClick={() => setIsCategoryManagerOpen(true)}
+        >
+          Manage categories
+        </button>
+      </div>
 
       <UploadZone onUploadSuccess={() => loadTransactions()} />
 
@@ -185,6 +307,8 @@ function App() {
         onReset={handleReset}
         excludeInternal={excludeInternal}
         onExcludeInternalChange={setExcludeInternal}
+        uncategorizedCount={uncategorizedCount}
+        onReviewUncategorized={() => handleSelectCategory(UNCATEGORIZED_LABEL)}
       />
 
       <SummaryCards
@@ -192,6 +316,7 @@ function App() {
         totalIncome={totalIncome}
         net={net}
         excludeInternal={excludeInternal}
+        categoryView={selectedCategorySummary}
       />
 
       <section className="panel">
@@ -206,10 +331,15 @@ function App() {
       {selectedCategory && (
         <section className="panel">
           <h2>{selectedCategory} by merchant</h2>
+          {selectedCategorySummary?.totalIn > 0 && (
+            <p className="category-flow-summary">
+              {formatFlowSummary(selectedCategorySummary.totalOut, selectedCategorySummary.totalIn)}
+            </p>
+          )}
           <MerchantBreakdown
             category={selectedCategory}
             data={merchantTotals}
-            color={categoryColorVar(selectedCategory)}
+            color={getCategoryColor(colorMap, selectedCategory)}
             selectedMerchant={selectedMerchant}
             onSelectMerchant={setSelectedMerchant}
           />
@@ -219,6 +349,7 @@ function App() {
       <section className="panel">
         <TransactionTable
           transactions={tableTransactions}
+          categories={categories}
           activeCategory={selectedCategory}
           activeMerchant={selectedMerchant}
           onClearCategory={() => {
@@ -226,8 +357,19 @@ function App() {
             setSelectedMerchant(null)
           }}
           onClearMerchant={() => setSelectedMerchant(null)}
+          onMoveCategory={handleMoveCategory}
         />
       </section>
+
+      {isCategoryManagerOpen && (
+        <CategoryManagerModal
+          categories={categories}
+          onClose={() => setIsCategoryManagerOpen(false)}
+          onCategoryAdded={handleCategoryAdded}
+          onCategoryDeleted={handleCategoryDeleted}
+          onCategoriesChanged={handleCategoriesChanged}
+        />
+      )}
     </div>
   )
 }

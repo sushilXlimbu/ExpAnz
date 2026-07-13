@@ -2,7 +2,7 @@ from decimal import Decimal
 
 # --- CATEGORY rules (broad bucket). First match wins. ---
 CATEGORY_RULES = [
-    (["monzo"],                       "Wallet Transfer"),
+    (["monzo","	Sushil Suhang"],      "Wallet Transfer"),
     (["trading 212", "212tlg"],       "Investment"),
     (["everup"],                      "Gift Card"),
     (["payward", "kraken"],           "Crypto"),
@@ -11,24 +11,25 @@ CATEGORY_RULES = [
     (["longdan", "iceland", "lidl", "sainsbury", "tesco", "asda", "aldi"], "Groceries"),
     (["pret", "poplar wingspot", "trendy chicken", "great harry",
       "new dallas", "great amwell", "mcdonald", "kfc", "greggs",
-      "nando", "dominos"],            "Eating Out"),
+      "nando", "dominos","SNOOKER","DELIVEROO"],            "Eating Out"),
     (["tfl", "uber", "trainline", "national rail"], "Transport"),
     (["lycamobile", "lyca", "vodafone", "three", "o2"], "Phone"),
     (["barber", "b&v"],               "Grooming"),
     (["capital one"],                 "Credit Card"),
     (["primark", "tkmaxx", "tk maxx", "amazon", "amzn", "ebay",
-      "everest store", "expo international", "woolwich sst"], "Shopping"),
-    (["yvonne", "kshitiz","zia ahmadi"],           "Person-to-Person"),
+      "everest store", "expo international", "woolwich sst","POUNDLAND","SHEIN"], "Shopping"),
+    (["yvonne", "kshitiz","zia ahmadi","Garima Phuyal","Rupam rayamajhi","Meena thapa"],           "Person-to-Person"),
 ]
 
 # --- MERCHANT rules (clean name = subcategory). First match wins. ---
 # Maps messy description keywords to a clean, canonical merchant name.
 MERCHANT_RULES = [
     (["primark"],                 "Primark"),
-    (["amazon", "amzn"],          "Amazon"),
+    (["amazon", "amzn","Amazon"],          "Amazon"),
     (["ebay"],                    "eBay"),
     (["tkmaxx", "tk maxx"],       "TK Maxx"),
     (["lidl"],                    "Lidl"),
+    (["Tesco Stores"],             "Tesco"),
     (["iceland"],                 "Iceland"),
     (["sainsbury"],               "Sainsbury's"),
     (["longdan ltd"],             "Longdan Ltd"),      # the employer (income)

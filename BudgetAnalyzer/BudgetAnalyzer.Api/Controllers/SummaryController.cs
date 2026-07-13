@@ -33,10 +33,12 @@ namespace BudgetAnalyzer.Api.Controllers
                 .Select(g => new CategorySummary
                 {
                     Category = g.Key,
-                    Total = g.Sum(t => t.Amount),
+                    TotalOut = g.Where(t => t.Amount < 0).Sum(t => t.Amount),
+                    TotalIn = g.Where(t => t.Amount > 0).Sum(t => t.Amount),
+                    Net = g.Sum(t => t.Amount),
                     Count = g.Count()
                 })
-                .OrderBy(c => c.Total)
+                .OrderBy(c => c.TotalOut)
                 .ToListAsync();
 
             return summary;
