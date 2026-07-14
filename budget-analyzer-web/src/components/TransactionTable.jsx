@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { formatCurrency, formatDate } from '../utils/format'
+
+const PAGE_SIZE = 20
 
 function TransactionTable({
   transactions,
@@ -11,6 +13,16 @@ function TransactionTable({
   onMoveCategory,
 }) {
   const [rowState, setRowState] = useState({})
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+
+  // Jump back to the top page whenever the drill-down scope changes — editing
+  // a row's category in place shouldn't reset the reader's place in the list.
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE)
+  }, [activeCategory, activeMerchant])
+
+  const visibleTransactions = transactions.slice(0, visibleCount)
+  const hasMore = visibleCount < transactions.length
 
   async function handleCategoryChange(t, newCategory) {
     if (newCategory === t.category) return
@@ -60,7 +72,7 @@ function TransactionTable({
               </tr>
             </thead>
             <tbody>
-              {transactions.map((t) => {
+              {visibleTransactions.map((t) => {
                 const state = rowState[t.id]
                 const isSaving = state === 'saving'
                 const rowError = state && state !== 'saving' ? state : null
@@ -101,6 +113,18 @@ function TransactionTable({
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {hasMore && (
+        <div className="table-load-more">
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+          >
+            Show 20 more ({transactions.length - visibleCount} remaining)
+          </button>
         </div>
       )}
     </div>

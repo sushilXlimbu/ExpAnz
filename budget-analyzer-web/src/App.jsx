@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { fetchCategories, fetchTransactions, updateTransactionCategory } from './api'
+import { fetchCategories, fetchMonthlySummary, fetchTransactions, updateTransactionCategory } from './api'
 import FilterBar from './components/FilterBar'
 import SummaryCards from './components/SummaryCards'
 import CategoryChart from './components/CategoryChart'
+import MonthlyComparison from './components/MonthlyComparison'
 import MerchantBreakdown from './components/MerchantBreakdown'
 import TransactionTable from './components/TransactionTable'
 import UploadZone from './components/UploadZone'
@@ -39,6 +40,10 @@ function App() {
   const [selectedCategory, setSelectedCategory] = useState(null)
   const [selectedMerchant, setSelectedMerchant] = useState(null)
   const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false)
+
+  const [monthlyRows, setMonthlyRows] = useState([])
+  const [monthlyLoading, setMonthlyLoading] = useState(false)
+  const [monthlyError, setMonthlyError] = useState(null)
 
   // `initial` controls whether this shows the full-page loading/error state
   // (first load) or refreshes quietly behind the current view (post-upload,
@@ -77,6 +82,31 @@ function App() {
     loadCategories()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Drives the month-over-month comparison view off the same date range as
+  // the rest of the dashboard, so its numbers always agree with what's shown
+  // elsewhere.
+  useEffect(() => {
+    if (!startDate || !endDate) return
+    let cancelled = false
+    setMonthlyLoading(true)
+    fetchMonthlySummary(startDate, endDate)
+      .then((data) => {
+        if (cancelled) return
+        setMonthlyRows(data)
+        setMonthlyError(null)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setMonthlyError(err.message)
+      })
+      .finally(() => {
+        if (!cancelled) setMonthlyLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [startDate, endDate])
 
   const colorMap = useMemo(() => buildCategoryColorMap(categories), [categories])
 
@@ -124,6 +154,17 @@ function App() {
   const uncategorizedCount = useMemo(
     () => filteredByDate.filter((t) => t.category === UNCATEGORIZED_LABEL).length,
     [filteredByDate],
+  )
+
+  // Same Income/internal-transfer exclusions as rawCategoryTotals below, so
+  // the monthly comparison view agrees with the doughnut chart and summary
+  // cards instead of showing a contradictory picture of "spending".
+  const monthlyComparisonRows = useMemo(
+    () =>
+      monthlyRows.filter(
+        (r) => r.category !== 'Income' && !(excludeInternal && INTERNAL_CATEGORIES.includes(r.category)),
+      ),
+    [monthlyRows, excludeInternal],
   )
 
   // Gross outflow per category drives the chart's slice size — the same
@@ -325,6 +366,18 @@ function App() {
           data={chartData}
           selectedCategory={selectedCategory}
           onSelectCategory={handleSelectCategory}
+        />
+      </section>
+
+      <section className="panel">
+        <h2>Month-over-month comparison</h2>
+        <MonthlyComparison
+          rows={monthlyComparisonRows}
+          colorMap={colorMap}
+          startDate={startDate}
+          endDate={endDate}
+          loading={monthlyLoading}
+          error={monthlyError}
         />
       </section>
 

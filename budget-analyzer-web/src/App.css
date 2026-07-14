@@ -511,6 +511,11 @@
   cursor: help;
 }
 
+.table-load-more {
+  display: flex;
+  justify-content: center;
+}
+
 /* Modal */
 .modal-backdrop {
   position: fixed;
@@ -636,3 +641,132 @@
   font-size: 13px;
   margin: 8px 0 0;
 }
+
+/* Monthly comparison */
+.monthly-comparison {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.mover-callouts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mover-chip {
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 6px 14px;
+  white-space: nowrap;
+}
+
+.mover-chip.is-up {
+  color: var(--status-critical);
+  background: color-mix(in srgb, var(--status-critical) 12%, var(--surface-1));
+  border: 1px solid color-mix(in srgb, var(--status-critical) 35%, var(--border));
+}
+
+.mover-chip.is-down {
+  color: var(--status-good);
+  background: color-mix(in srgb, var(--status-good) 12%, var(--surface-1));
+  border: 1px solid color-mix(in srgb, var(--status-good) 35%, var(--border));
+}
+
+.monthly-trend {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.trend-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.trend-legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 12px 5px 8px;
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.trend-legend-chip:hover {
+  background: var(--code-bg);
+}
+
+.trend-legend-chip.is-visible {
+  color: var(--text-primary);
+  background: var(--code-bg);
+  opacity: 1;
+}
+
+.trend-legend-chip.is-other {
+  cursor: default;
+  border-style: dashed;
+}
+.trend-legend-chip.is-other:hover {
+  background: transparent;
+}
+
+.chart-tooltip-rows {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 6px 0 0;
+  border-top: 1px solid var(--gridline);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chart-tooltip-rows li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.chart-tooltip-key {
+  width: 10px;
+  height: 2px;
+  border-radius: 1px;
+  flex: 0 0 auto;
+}
+
+.chart-tooltip-series {
+  flex: 1;
+  color: var(--text-secondary);
+}
+
+.chart-tooltip-amount {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.partial-flag {
+  color: var(--text-muted);
+}
+
+.partial-footnote {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+

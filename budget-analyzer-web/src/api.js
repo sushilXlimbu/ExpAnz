@@ -38,6 +38,11 @@ export function fetchSummary(startDate, endDate) {
   return request(`/api/summary?${params.toString()}`)
 }
 
+export function fetchMonthlySummary(startDate, endDate) {
+  const params = new URLSearchParams({ startDate, endDate })
+  return request(`/api/summary/monthly?${params.toString()}`)
+}
+
 export function fetchCategories() {
   return request('/api/categories')
 }
