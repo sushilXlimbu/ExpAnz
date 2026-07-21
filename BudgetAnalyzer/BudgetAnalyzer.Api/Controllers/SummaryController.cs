@@ -33,13 +33,47 @@ namespace BudgetAnalyzer.Api.Controllers
                 .Select(g => new CategorySummary
                 {
                     Category = g.Key,
-                    Total = g.Sum(t => t.Amount),
+                    TotalOut = g.Where(t => t.Amount < 0).Sum(t => t.Amount),
+                    TotalIn = g.Where(t => t.Amount > 0).Sum(t => t.Amount),
+                    Net = g.Sum(t => t.Amount),
                     Count = g.Count()
                 })
-                .OrderBy(c => c.Total)
+                .OrderBy(c => c.TotalOut)
                 .ToListAsync();
 
             return summary;
+        }
+        // GET: api/summary/monthly?startDate=2026-03-01&endDate=2026-07-31
+        [HttpGet("monthly")]
+        public async Task<ActionResult<IEnumerable<MonthlyCategorySummary>>> GetMonthlySummary(
+            [FromQuery] DateTime startDate,
+            [FromQuery] DateTime endDate)
+        {
+            if (startDate > endDate)
+                return BadRequest("startDate must be on or before endDate.");
+
+            endDate = endDate.Date.AddDays(1).AddTicks(-1);
+
+            var summary = await _context.Transactions
+                .Where(t => t.Date >= startDate && t.Date <= endDate)
+                .GroupBy(t => new
+                {
+                    Year = t.Date.Year,
+                    Month = t.Date.Month,
+                    t.Category
+                })
+                .Select(g => new MonthlyCategorySummary
+                {
+                    Month = $"{g.Key.Year:D4}-{g.Key.Month:D2}",
+                    Category = g.Key.Category,
+                    TotalOut = g.Where(t => t.Amount < 0).Sum(t => t.Amount),
+                    TotalIn = g.Where(t => t.Amount > 0).Sum(t => t.Amount),
+                    Net = g.Sum(t => t.Amount),
+                    Count = g.Count()
+                })
+                .ToListAsync();
+
+            return summary.OrderBy(s => s.Month).ThenBy(s => s.Category).ToList();
         }
     }
 }

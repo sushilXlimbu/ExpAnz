@@ -8,6 +8,8 @@ function FilterBar({
   onReset,
   excludeInternal,
   onExcludeInternalChange,
+  uncategorizedCount,
+  onReviewUncategorized,
 }) {
   return (
     <div className="filter-bar">
@@ -44,6 +46,12 @@ function FilterBar({
         />
         Exclude internal transfers (Wallet Transfer, Investment, Crypto, Gift Card)
       </label>
+
+      {uncategorizedCount > 0 && (
+        <button type="button" className="uncategorized-chip" onClick={onReviewUncategorized}>
+          {uncategorizedCount} uncategorized — review
+        </button>
+      )}
     </div>
   )
 }

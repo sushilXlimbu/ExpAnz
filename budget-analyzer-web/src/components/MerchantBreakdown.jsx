@@ -1,13 +1,16 @@
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { formatCurrency } from '../utils/format'
+import { formatCurrency, formatFlowSummary } from '../utils/format'
 
 function CustomTooltip({ active, payload }) {
   if (!active || !payload?.length) return null
-  const { merchant, value } = payload[0].payload
+  const { merchant, value, totalOut, totalIn } = payload[0].payload
   return (
     <div className="chart-tooltip">
       <div className="chart-tooltip-value">{formatCurrency(value)}</div>
       <div className="chart-tooltip-label">{merchant}</div>
+      {totalIn > 0 && (
+        <div className="chart-tooltip-flow">{formatFlowSummary(totalOut, totalIn)}</div>
+      )}
     </div>
   )
 }

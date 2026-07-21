@@ -86,5 +86,34 @@ namespace BudgetAnalyzer.Api.Controllers
             var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
             return Convert.ToHexString(bytes);
         }
+
+
+        // PUT: api/transactions/{id}/category
+        [HttpPut("{id}/category")]
+        public async Task<ActionResult> UpdateTransactionCategory(int id, [FromBody] UpdateCategoryRequest request)
+        {
+            var transaction = await _context.Transactions.FindAsync(id);
+            if (transaction == null) return NotFound();
+
+            if (string.IsNullOrWhiteSpace(request.Category))
+                return BadRequest("Category is required.");
+
+            // Optional: verify the category actually exists
+            var categoryExists = await _context.Categories
+                .AnyAsync(c => c.Name == request.Category);
+            if (!categoryExists)
+                return BadRequest($"Category '{request.Category}' does not exist.");
+
+            transaction.Category = request.Category;
+            await _context.SaveChangesAsync();
+
+            return Ok(transaction);
+        }
+        public class UpdateCategoryRequest
+        {
+            public string Category { get; set; } = string.Empty;
+        }
+
     }
+
 }
