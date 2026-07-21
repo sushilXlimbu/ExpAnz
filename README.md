@@ -1,4 +1,4 @@
-# ExpAnz — Automated Bank Statement Analyzer
+# ExpAnz — Automated Expenditure Analyzer with Bank Statement 
 
 Turn raw bank statement PDFs into an interactive spending dashboard — with zero manual data entry.
 
